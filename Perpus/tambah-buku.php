@@ -6,24 +6,23 @@ $kategori = $conn->query("SELECT * FROM kategori");
 
 // Generate ID Buku otomatis
 function generateIdBuku($conn) {
-    // Ambil id_buku terakhir yang urut berdasarkan nomor setelah huruf B
     $result = $conn->query("SELECT id_buku FROM buku WHERE id_buku LIKE 'B%' ORDER BY CAST(SUBSTRING(id_buku, 2) AS UNSIGNED) DESC LIMIT 1");
     if ($result && $result->num_rows > 0) {
         $row = $result->fetch_assoc();
-        $lastId = $row['id_buku']; // misal "B12"
-        $num = (int) substr($lastId, 1); // ambil angka setelah B, misal 12
-        $num++; // tambah 1
+        $num = (int) substr($row['id_buku'], 1);
+        $num++;
     } else {
-        $num = 1; // jika belum ada data sama sekali, mulai dari 1
+        $num = 1;
     }
     return "B" . $num;
 }
 
 $id_buku_otomatis = generateIdBuku($conn);
 
-// Simpan data jika form disubmit
+// Untuk menampilkan pesan
+$pesan = "";
+
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-    // Gunakan id_buku otomatis, jangan ambil dari input form
     $id_buku     = $id_buku_otomatis;
     $judul       = $_POST['judul_buku'];
     $pengarang   = $_POST['pengarang'];
@@ -36,11 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     $stmt->bind_param("sssssss", $id_buku, $judul, $pengarang, $tahun, $jumlah, $penerbit, $id_kategori);
 
     if ($stmt->execute()) {
-        // setelah berhasil tambah, reload agar id_buku baru otomatis muncul
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit;
+        $pesan = "<div class='alert alert-success'>Buku berhasil ditambahkan!</div>";
+        $id_buku_otomatis = generateIdBuku($conn); // Refresh ID agar siap tambah buku baru
     } else {
-        echo "<div class='alert alert-danger'>Gagal menambahkan buku: " . htmlspecialchars($stmt->error) . "</div>";
+        $pesan = "<div class='alert alert-danger'>Gagal menambahkan buku: " . htmlspecialchars($stmt->error) . "</div>";
     }
 }
 ?>
@@ -48,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <div class="container mt-4">
     <h3 class="mb-4">Tambah Buku</h3>
+    <?= $pesan ?>
     <form method="post" class="border p-4 rounded bg-light">
         <div class="mb-3">
             <label>ID Buku:</label>
