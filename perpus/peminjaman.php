@@ -3,8 +3,12 @@
 $sql = "SELECT peminjaman.*, anggota.nm_anggota 
         FROM peminjaman 
         LEFT JOIN anggota ON peminjaman.id_anggota = anggota.id_anggota 
-        ORDER BY id_peminjaman ASC";
+        ORDER BY no_peminjaman ASC";
 $result = $conn->query($sql);
+
+if (!$result) {
+    die("Query Error: " . $conn->error);
+}
 
 // Proses hapus jika ada parameter hapus
 if (isset($_GET['hapus'])) {
