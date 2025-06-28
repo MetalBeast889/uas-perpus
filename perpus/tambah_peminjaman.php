@@ -2,7 +2,6 @@
 // koneksi database
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Fungsi generate no_peminjaman otomatis
     function generateNoPeminjaman($conn) {
         $result = $conn->query("SELECT MAX(CAST(SUBSTRING(no_peminjaman, 3) AS UNSIGNED)) AS max_num FROM peminjaman");
         $row = $result->fetch_assoc();
@@ -11,37 +10,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     $tgl_pinjam = $_POST['tgl_pinjam'];
-    $tgl_kembali = $_POST['tgl_kembali'];
+    $durasi = $_POST['durasi_kembali']; // nilai misal: 3,7,14,30 (hari)
     $id_anggota = $_POST['id_anggota'];
     $no_peminjaman = generateNoPeminjaman($conn);
 
-    // Simpan ke tabel peminjaman
+    // Hitung tanggal kembali dari tgl_pinjam + durasi hari
+    $tgl_kembali = date('Y-m-d', strtotime($tgl_pinjam . " +$durasi days"));
+
     $query = "INSERT INTO peminjaman (no_peminjaman, tgl_peminjaman, tgl_harus_kembali, id_anggota)
               VALUES ('$no_peminjaman', '$tgl_pinjam', '$tgl_kembali', '$id_anggota')";
 
     if ($conn->query($query)) {
-        // Proses detail pinjaman di tabel dapat
         foreach ($_POST['id_buku'] as $i => $id_buku) {
             $jumlah = (int)$_POST['jumlah'][$i];
 
-            // Ambil copy buku yang tersedia sebanyak $jumlah
             $copy = $conn->query("SELECT no_copy_buku FROM copy_buku 
                                   WHERE id_buku = '$id_buku' AND status_buku = 'tersedia'
                                   LIMIT $jumlah");
 
             if ($copy->num_rows < $jumlah) {
                 echo "<script>alert('Copy buku untuk buku ID $id_buku tidak cukup tersedia'); window.history.back();</script>";
-                // Batalkan transaksi peminjaman (optional, bisa tambahkan transaksi MySQL)
                 exit;
             }
 
             while ($c = $copy->fetch_assoc()) {
                 $no_copy = $c['no_copy_buku'];
 
-                // Update status copy buku jadi 'dipinjam'
                 $conn->query("UPDATE copy_buku SET status_buku = 'dipinjam' WHERE no_copy_buku = '$no_copy'");
-
-                // Insert detail ke tabel dapat
                 $conn->query("INSERT INTO dapat (no_peminjaman, no_copy_buku, jml_pinjam) 
                               VALUES ('$no_peminjaman', '$no_copy', 1)");
             }
@@ -84,17 +79,23 @@ while ($b = $buku_result->fetch_assoc()) {
 
 <form method="POST" class="container">
 
-    <div class="mb-3 w-auto">
+    <div class="mb-3" style="width: 180px;">
         <label class="form-label">Tanggal Pinjam</label>
         <input type="date" name="tgl_pinjam" class="form-control form-control-sm" required>
     </div>
 
-    <div class="mb-3 w-auto">
-        <label class="form-label">Tanggal Kembali</label>
-        <input type="date" name="tgl_kembali" class="form-control form-control-sm" required>
+    <div class="mb-3 mt-2" style="width: 180px;">
+        <label class="form-label">Durasi Kembali</label>
+        <select name="durasi_kembali" class="form-select form-select-sm" required>
+            <option value="">-- Pilih Durasi --</option>
+            <option value="3">3 Hari</option>
+            <option value="7">1 Minggu</option>
+            <option value="14">2 Minggu</option>
+            <option value="30">1 Bulan</option>
+        </select>
     </div>
 
-    <div class="mb-3 w-auto">
+    <div class="mb-3 mt-3 w-auto">
         <label class="form-label">Nama Anggota</label>
         <select name="id_anggota" class="form-select" required>
             <option value="">-- Pilih Anggota --</option>
@@ -108,11 +109,11 @@ while ($b = $buku_result->fetch_assoc()) {
         <table class="table table-bordered" id="tabel_buku">
             <thead>
                 <tr class="table-secondary text-center">
-                    <th>No</th>
-                    <th>ID Buku</th>
+                    <th style="width:40px;">No</th>
+                    <th style="width:80px;">ID Buku</th>
                     <th>Judul Buku</th>
-                    <th>Jumlah</th>
-                    <th>Aksi</th>
+                    <th style="width:80px;">Jumlah</th>
+                    <th style="width:60px;">Aksi</th>
                 </tr>
             </thead>
             <tbody>
@@ -146,12 +147,10 @@ const bookData = <?= json_encode($bookData) ?>;
 const tableBody = document.querySelector("#tabel_buku tbody");
 const btnTambah = document.getElementById("btn-tambah");
 
-// Fungsi ambil semua id buku yang sudah dipilih
 function getSelectedBookIds() {
     return [...document.querySelectorAll(".judul-buku")].map(sel => sel.value).filter(val => val);
 }
 
-// Update opsi dropdown agar tidak ada buku yang dipilih lebih dari sekali
 function updateDropdownOptions() {
     const selectedIds = getSelectedBookIds();
 
@@ -165,7 +164,6 @@ function updateDropdownOptions() {
     });
 }
 
-// Tambah baris baru tabel
 btnTambah.addEventListener("click", () => {
     const rowCount = tableBody.rows.length + 1;
     const row = tableBody.insertRow();
@@ -188,7 +186,6 @@ btnTambah.addEventListener("click", () => {
     updateDropdownOptions();
 });
 
-// Saat dropdown judul buku berubah, sinkronkan id buku dan batas jumlah maksimal
 tableBody.addEventListener("change", (e) => {
     if (e.target.classList.contains("judul-buku")) {
         const select = e.target;
@@ -207,7 +204,6 @@ tableBody.addEventListener("change", (e) => {
     }
 });
 
-// Hapus baris tabel
 tableBody.addEventListener("click", (e) => {
     if (e.target.classList.contains("btn-hapus")) {
         e.target.closest("tr").remove();
@@ -216,7 +212,6 @@ tableBody.addEventListener("click", (e) => {
     }
 });
 
-// Update nomor urut baris tabel
 function updateNomor() {
     [...tableBody.rows].forEach((row, i) => {
         row.cells[0].textContent = i + 1;
